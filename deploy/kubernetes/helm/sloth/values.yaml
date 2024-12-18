@@ -46,6 +46,13 @@ commonPlugins:
         cpu: 5m
         memory: 50Mi
 
+customPlugins:
+  enabled: true
+  image:
+    repository: k8s.gcr.io/git-sync/git-sync
+    tag: v3.6.1
+  gitRepos:
+
 metrics:
   enabled: true
   #scrapeInterval: 30s

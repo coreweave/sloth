@@ -69,7 +69,7 @@ spec:
               name: metrics
               protocol: TCP
           {{- end }}
-          {{- if or .Values.commonPlugins.enabled .Values.customSloConfig.enabled }}
+          {{- if or .Values.commonPlugins.enabled .Values.customSloConfig.enabled .Values.customPlugins.enabled }}
           volumeMounts:
           {{- if .Values.commonPlugins.enabled }}
             - name: sloth-common-sli-plugins
@@ -78,6 +78,14 @@ spec:
           {{- if .Values.customSloConfig.enabled }}
             - name: sloth-windows
               mountPath: {{ .Values.customSloConfig.path }}
+          {{- end }}
+          {{- if .Values.customPlugins.enabled }}
+          {{- range $key, $value := .Values.customPlugins.gitRepos }}
+          {{- with (last (splitList "/" $value.url)) }}
+            - name: {{ . }}
+              mountPath: /plugins/{{ . }}
+          {{- end }}
+          {{- end }}
           {{- end }}
           {{- end }}
           {{- with .Values.securityContext.container }}
@@ -109,15 +117,46 @@ spec:
           resources:
           {{- toYaml .Values.commonPlugins.gitRepo.resources | nindent 12 }}
         {{- end }}
+        {{- if .Values.customPlugins.enabled }}
+        {{- range $key, $value := .Values.customPlugins.gitRepos }}
+        {{- with (last (splitList "/" $value.url)) }}
+        - name: {{ . }}
+          image: {{ $.Values.customPlugins.image.repository }}:{{ $.Values.customPlugins.image.tag }}
+          args:
+            - --repo={{$value.url}}
+            - --branch={{$value.branch}}
+            - --wait=30
+            - --webhook-url=http://localhost:8082/-/reload
+          volumeMounts:
+            - name: {{ . }}
+              # Default path for git-sync.
+              mountPath: /tmp/git
+        {{- end}}
+          {{- with $.Values.securityContext.container }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+          {{- toYaml $.Values.resources | nindent 12 }}
+        {{- end }}
+        {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
 {{ include "sloth.imagePullSecrets" . | trim | indent 8 }}
       {{- end }}
-      {{- if or .Values.commonPlugins.enabled .Values.customSloConfig.enabled }}
+      {{- if or .Values.commonPlugins.enabled .Values.customSloConfig.enabled .Values.customPlugins.enabled }}
       volumes:
       {{- if .Values.commonPlugins.enabled }}
         - name: sloth-common-sli-plugins
           emptyDir: {}
+      {{- end }}
+      {{- if .Values.customPlugins.enabled }}
+      {{- range $key, $value := .Values.customPlugins.gitRepos }}
+      {{- with (last (splitList "/" $value.url)) }}
+        - name: {{ . }}
+          emptyDir: {}
+      {{- end }}
+      {{- end }}
       {{- end }}
       {{- if .Values.customSloConfig.enabled }}
         - name: sloth-windows
@@ -126,4 +165,3 @@ spec:
             name: {{ include "sloth.fullname" . }}
       {{- end }}
       {{- end }}
-
